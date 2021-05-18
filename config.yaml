@@ -1,0 +1,11 @@
+ServerHost: "localhost"
+ServerPort: "8008"
+SecretKey: "2829e2cd4c5abffb926d8c11abf193f65c87f6503a50f5aaa2dfbe75da1913c0"
+
+PGUser: "postgres"
+PGDatabase: "auth_server"
+PGPassword: "root"
+PGHost: "localhost"
+PGPort: "5432"
+
+
