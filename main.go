@@ -18,9 +18,9 @@ import (
 	"time"
 )
 
-// @title           Business directory API
+// @title           Authentication API
 // @version         1.0
-// @description     This is the API for business directory api..
+// @description     This is the API for Authentication api..
 
 // @contact.name   API Support
 // @contact.url    http://www.swagger.io/support
@@ -30,13 +30,12 @@ import (
 // @license.url   http://www.apache.org/licenses/LICENSE-2.0.html
 
 // @host      localhost:8000
-// @BasePath  /directory/api/v1
+// @BasePath  /auth/v1
 
 // @Security ApiKeyAuth
 // @securityDefinitions.basic  ApiKeyAuth
 
 func initLog() {
-
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetOutput(os.Stdout)
 
@@ -105,10 +104,10 @@ func main() {
 
 func documentation() {
 	// programmatically set swagger info
-	docs.SwaggerInfo.Title = "Business directory API"
-	docs.SwaggerInfo.Description = "This is the API for business directory api."
+	docs.SwaggerInfo.Title = "Authentication API"
+	docs.SwaggerInfo.Description = "This is the API for Authentication api."
 	docs.SwaggerInfo.Version = "1.0"
-	docs.SwaggerInfo.Host = fmt.Sprintf("%s", configs.Instance.BASEURL)
-	docs.SwaggerInfo.BasePath = fmt.Sprintf("/%s/api/v1", configs.Instance.BASEURL)
+	docs.SwaggerInfo.Host = configs.Instance.BASEURL
+	docs.SwaggerInfo.BasePath = "/auth/v1"
 	docs.SwaggerInfo.Schemes = []string{"http", "https"}
 }
