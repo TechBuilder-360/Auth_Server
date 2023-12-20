@@ -8,7 +8,6 @@ import (
 	"github.com/TechBuilder-360/Auth_Server/internal/database"
 	"github.com/TechBuilder-360/Auth_Server/internal/database/redis"
 	"github.com/TechBuilder-360/Auth_Server/routers"
-	"github.com/TechBuilder-360/Auth_Server/seeder"
 	logrus_papertrail "github.com/polds/logrus-papertrail-hook"
 	log "github.com/sirupsen/logrus"
 	_ "github.com/swaggo/files"
@@ -75,18 +74,16 @@ func main() {
 	// migrate db models
 	err := database.DBMigration(dbConnection)
 	if err != nil {
-		panic(fmt.Sprintf("Migration Failed: %s", err.Error()))
+		panic(fmt.Sprintf("DB migration failed: %s", err.Error()))
 	}
-	go seeder.Seed(dbConnection)
 
-	// Setup cache
-	//middlewares.ResponseCache()
+	//go seeder.Seed(dbConnection)
 
 	// Set up the routes
 	router := routers.SetupRoutes()
 
 	// Start the server
-	log.Info("Server started on port %s:%s", configs.Instance.BASEURL, configs.Instance.Port)
+	log.Info(fmt.Sprintf("Server started on %s:%s", configs.Instance.BASEURL, configs.Instance.Port))
 
 	s := &http.Server{
 		Addr:           fmt.Sprintf("%s:%s", configs.Instance.BASEURL, configs.Instance.Port),

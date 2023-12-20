@@ -15,7 +15,7 @@ type Controller interface {
 }
 
 func (c *NewController) RegisterRoutes(router *mux.Router) {
-	api := router.PathPrefix("").Subrouter()
+	api := router.Name("general").Subrouter()
 
 	api.HandleFunc("/ping", c.Ping)
 }

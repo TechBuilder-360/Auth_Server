@@ -1,6 +1,7 @@
 package routers
 
 import (
+	"github.com/TechBuilder-360/Auth_Server/internal/configs"
 	"github.com/TechBuilder-360/Auth_Server/internal/controllers"
 	"github.com/TechBuilder-360/Auth_Server/internal/middlewares"
 	"github.com/gorilla/mux"
@@ -17,6 +18,9 @@ func SetupRoutes() *mux.Router {
 		controller      = controllers.DefaultController()
 	)
 
+	//*******************************************
+	//******* Middlewares **********************
+	//*******************************************
 	router.Use(middlewares.Recovery)
 
 	//*******************************************
@@ -34,7 +38,9 @@ func SetupRoutes() *mux.Router {
 	//*************************************
 	usersController.RegisterRoutes(router)
 
-	router.PathPrefix("/documentation/").Handler(httpSwagger.WrapHandler)
+	if configs.IsSandBox() {
+		router.PathPrefix("/documentation/").Handler(httpSwagger.WrapHandler)
+	}
 
 	log.Info("Routes have been initialized")
 

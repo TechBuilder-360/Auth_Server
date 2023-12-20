@@ -27,7 +27,7 @@ type NewAuthController struct {
 }
 
 func (c *NewAuthController) RegisterRoutes(router *mux.Router) {
-	apis := router.PathPrefix("/auth").Subrouter()
+	apis := router.PathPrefix("/auth/v1").Subrouter()
 
 	apis.HandleFunc("/registration", c.Registration).Methods(http.MethodPost)
 	apis.HandleFunc("/activate", c.ActivateEmail).Methods(http.MethodGet)
