@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/TechBuilder-360/Auth_Server/internal/configs"
 	"github.com/redis/go-redis/v9"
@@ -90,7 +91,7 @@ func (c *Client) Get(key string) (*string, error) {
 
 	key = fmt.Sprintf("%s-%s", c.namespace, key)
 	result, err := c.Client.Get(ctx, key).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil, nil
 	}
 	return &result, err
@@ -102,7 +103,7 @@ func (c *Client) HGet(key string) (*string, error) {
 
 	key = fmt.Sprintf("%s-%s", c.namespace, key)
 	result, err := c.Client.Get(ctx, key).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil, nil
 	}
 	return &result, err
@@ -114,7 +115,7 @@ func (c *Client) Exists(key string) (bool, error) {
 
 	key = fmt.Sprintf("%s-%s", c.namespace, key)
 	res, err := c.Client.Exists(ctx, key).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return false, nil
 	}
 

@@ -1,25 +1,29 @@
 package validation
 
 import (
-	"encoding/json"
-	"github.com/TechBuilder-360/Auth_Server/internal/common/utils"
+	"errors"
+	"fmt"
 	"github.com/go-playground/validator/v10"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 )
 
-func ValidateStruct(w http.ResponseWriter, requestData interface{}, logger *log.Entry) bool {
+func ValidateStruct(requestData interface{}, logger *log.Entry) ([]string, bool) {
 	validationRes := validator.New()
 	if err := validationRes.Struct(requestData); err != nil {
-		validationErrors := err.(validator.ValidationErrors)
+		var validationErrors validator.ValidationErrors
+		errors.As(err, &validationErrors)
+		errMsgs := make([]string, 0)
 		logger.Error("Validation failed on some fields : %+v", validationErrors)
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(utils.ErrorResponse{
-			Status:  false,
-			Message: "Invalid request",
-			Error:   validationErrors.Error(),
-		})
-		return true
+		for _, err := range validationErrors {
+			errMsgs = append(errMsgs, fmt.Sprintf(
+				"[%s]: '%v' | validation failed '%s'",
+				err.Field(),
+				err.Value(),
+				err.Tag(),
+			))
+		}
+
+		return errMsgs, false
 	}
-	return false
+	return nil, true
 }
