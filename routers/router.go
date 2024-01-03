@@ -12,8 +12,9 @@ import (
 
 func SetupRoutes() *fiber.App {
 	router := fiber.New(fiber.Config{
-		CaseSensitive: true,
-		ErrorHandler:  middlewares.DefaultErrorHandler,
+		CaseSensitive:         true,
+		ErrorHandler:          middlewares.DefaultErrorHandler,
+		DisableStartupMessage: true,
 	})
 
 	var (

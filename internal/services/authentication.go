@@ -189,9 +189,6 @@ func (d *authService) Login(body *types.AuthRequest) (*types.LoginResponse, erro
 		log.Error("an error occurred when removing jwt token. %s", err.Error())
 	}
 
-	user.LastLogin = time.Now()
-	d.userRepo.Update(user)
-
 	profile := types.UserProfile{
 		ID:            user.ID,
 		FirstName:     user.FirstName,
@@ -205,6 +202,11 @@ func (d *authService) Login(body *types.AuthRequest) (*types.LoginResponse, erro
 
 	response.Profile = profile
 	response.Authentication = *tk
+
+	defer func() {
+		user.LastLogin = time.Now()
+		d.userRepo.Update(user)
+	}()
 
 	return response, nil
 }
@@ -262,12 +264,7 @@ func (d *authService) RequestToken(body *types.EmailRequest, logger *log.Entry) 
 
 type authCustomClaims struct {
 	UserId string `json:"user_id"`
-	Token  jwt.StandardClaims
-}
-
-func (a authCustomClaims) Valid() error {
-	//TODO implement me
-	panic("implement me")
+	jwt.StandardClaims
 }
 
 func (d *authService) generateJWT(userId string) (*types.Authentication, error) {
@@ -284,7 +281,7 @@ func (d *authService) generateJWT(userId string) (*types.Authentication, error) 
 	expireAt := time.Now().Add(time.Hour * 24)
 	claims := &authCustomClaims{
 		UserId: userId,
-		Token: jwt.StandardClaims{
+		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expireAt.Unix(),
 			Issuer:    configs.Instance.AppName,
 			IssuedAt:  time.Now().Unix(),
@@ -319,7 +316,7 @@ func (d *authService) ValidateToken(encodedToken string) (*authCustomClaims, err
 		if err != nil {
 			return nil, err
 		}
-		key := fmt.Sprintf("%s-%v", configs.Instance.Secret, rt)
+		key := fmt.Sprintf("%s-%s", configs.Instance.Secret, utils.AddToStr(rt))
 		return []byte(key), nil
 	})
 
