@@ -1,79 +1,59 @@
 package middlewares
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
-	"github.com/TechBuilder-360/Auth_Server/internal/common/utils"
 	"github.com/TechBuilder-360/Auth_Server/internal/model"
-	"github.com/TechBuilder-360/Auth_Server/internal/repository"
-	"github.com/TechBuilder-360/Auth_Server/internal/services"
-	"github.com/dgrijalva/jwt-go"
-	log "github.com/sirupsen/logrus"
+	"github.com/gofiber/fiber/v2"
 	"net/http"
 )
 
 // AuthorizeUserJWT authorise user JWT
-func AuthorizeUserJWT() Adapter {
+//func AuthorizeUserJWT(ctx *fiber.Ctx) error {
+//	var user *model.User
+//	tokenString := ExtractBearerToken(ctx)
+//	if tokenString == "" {
+//		return ctx.Status(http.StatusUnauthorized).JSON(utils.ErrorResponse{
+//			Status:  false,
+//			Message: "missing authentication token",
+//		})
+//	}
+//
+//	token, err := services.NewAuthService().ValidateToken(tokenString)
+//	if err != nil {
+//		log.Error(err)
+//		return ctx.Status(http.StatusUnauthorized).JSON(utils.ErrorResponse{
+//			Status:  false,
+//			Message: "authentication failed",
+//		})
+//	}
+//	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+//		userId := claims["user_id"].(string)
+//		user, err = repository.NewUserRepository().GetUserByID(userId)
+//		if err != nil {
+//			log.Error(err)
+//			return ctx.Status(http.StatusUnauthorized).JSON(utils.ErrorResponse{
+//				Status:  false,
+//				Message: "account not found",
+//			})
+//		}
+//
+//		ctx.Locals(AuthUserContextKey, user)
+//
+//	} else {
+//		log.Error(err)
+//		return ctx.Status(http.StatusUnauthorized).JSON(utils.ErrorResponse{
+//			Status:  false,
+//			Message: "unauthorized",
+//		})
+//	}
+//
+//	// Serve the next handler
+//	return ctx.Next()
+//}
 
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-			var user *model.User
-			var ctx context.Context
-			tokenString := ExtractBearerToken(r)
-			if tokenString == "" {
-				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(utils.ErrorResponse{
-					Status:  false,
-					Message: "missing authentication token",
-				})
-				return
-			}
-			token, err := services.NewAuthService().ValidateToken(tokenString)
-			if err != nil {
-				log.Error(err)
-				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(utils.ErrorResponse{
-					Status:  false,
-					Message: "authentication failed",
-				})
-				return
-			}
-			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-				userId := claims["user_id"].(string)
-				user, err = repository.NewUserRepository().GetUserByID(userId)
-				if err != nil {
-					log.Error(err)
-					w.WriteHeader(http.StatusUnauthorized)
-					json.NewEncoder(w).Encode(utils.ErrorResponse{
-						Status:  false,
-						Message: "account not found",
-					})
-					return
-				}
-
-				ctx = context.WithValue(r.Context(), AuthUserContextKey, user)
-
-			} else {
-				log.Error(err)
-				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(utils.ErrorResponse{
-					Status:  false,
-					Message: "unauthorized",
-				})
-				return
-			}
-
-			// Serve the next handler
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-func ExtractBearerToken(r *http.Request) string {
+func ExtractBearerToken(ctx *fiber.Ctx) string {
 	const BearerSchema = "Bearer"
-	authHeader := r.Header.Get("Authorization")
+	authHeader := ctx.Get(fiber.HeaderAuthorization)
 	if authHeader == "" {
 		return ""
 	}

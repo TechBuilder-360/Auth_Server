@@ -10,11 +10,8 @@ import (
 	"github.com/TechBuilder-360/Auth_Server/routers"
 	logrus_papertrail "github.com/polds/logrus-papertrail-hook"
 	log "github.com/sirupsen/logrus"
-	_ "github.com/swaggo/files"
-	"net/http"
 	"os"
 	"strconv"
-	"time"
 )
 
 // @title           Authentication API
@@ -85,14 +82,14 @@ func main() {
 	// Start the server
 	log.Info(fmt.Sprintf("Server started on %s:%s", configs.Instance.BASEURL, configs.Instance.Port))
 
-	s := &http.Server{
-		Addr:           fmt.Sprintf("%s:%s", configs.Instance.BASEURL, configs.Instance.Port),
-		Handler:        router,
-		ReadTimeout:    30 * time.Second,
-		WriteTimeout:   30 * time.Second,
-		MaxHeaderBytes: 1 << 20,
-	}
-	err = s.ListenAndServe()
+	//s := &http.Server{
+	//	Addr:           fmt.Sprintf("%s:%s", configs.Instance.BASEURL, configs.Instance.Port),
+	//	Handler:        router,
+	//	ReadTimeout:    30 * time.Second,
+	//	WriteTimeout:   30 * time.Second,
+	//	MaxHeaderBytes: 1 << 20,
+	//}
+	err = router.Listen(fmt.Sprintf("%s:%s", configs.Instance.BASEURL, configs.Instance.Port))
 	if err != nil {
 		log.Error(err.Error())
 		return

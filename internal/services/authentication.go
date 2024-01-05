@@ -13,20 +13,20 @@ import (
 	"github.com/TechBuilder-360/Auth_Server/internal/repository"
 	"github.com/dgrijalva/jwt-go"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 	"strings"
 	"time"
 )
 
 //go:generate mockgen -destination=../mocks/services/mockService.go -package=services github.com/TechBuilder-360/business-directory-backend/services UserService
 type AuthService interface {
-	RegisterUser(body *types.Registration, log *log.Entry) error
-	ActivateEmail(token string, uid string, log *log.Entry) error
+	RegisterUser(body *types.Registration, log *log.Entry) *utils.AppError
+	ActivateEmail(token string, log *log.Entry) error
 	Login(body *types.AuthRequest) (*types.LoginResponse, error)
-	GenerateJWT(userID string) (*types.Authentication, error)
-	ValidateToken(encodedToken string) (*jwt.Token, error)
+	generateJWT(userID string) (*types.Authentication, error)
+	ValidateToken(encodedToken string) (*authCustomClaims, error)
 	RequestToken(body *types.EmailRequest, logger *log.Entry) error
-	RefreshUserToken(body types.RefreshTokenRequest, token string, logger *log.Entry) (*types.Authentication, error)
+	RefreshUserToken(body *types.RefreshTokenRequest, logger *log.Entry) (*types.Authentication, error)
+	Logout(Token string) error
 }
 
 type authService struct {
@@ -43,27 +43,28 @@ func NewAuthService() AuthService {
 	}
 }
 
-func (d *authService) ActivateEmail(token string, uid string, logger *log.Entry) error {
-	user, err := d.userRepo.GetUserByID(uid)
-	if err != nil || user == nil {
-		return errors.New("user not found")
-	}
-
-	if user.EmailVerified {
-		return errors.New("account is already active")
-	}
-
-	valid, err := d.repo.IsTokenValid(user.ID, token)
+func (d *authService) ActivateEmail(token string, logger *log.Entry) error {
+	uid, err := d.repo.GetToken(token)
 	if err != nil {
 		logger.Error("An Error occurred when validating login token. %s", err.Error())
 		return errors.New("account activation failed")
 	}
-	if !valid {
+	if uid == nil {
 		logger.Error(err.Error())
-		return errors.New("invalid activation link")
+		return errors.New("activation link has expired")
+	}
+
+	user, err := d.userRepo.GetUserByID(utils.AddToStr(uid))
+	if err != nil || user == nil {
+		return errors.New("account not found")
+	}
+
+	if user.EmailVerified {
+		return nil
 	}
 
 	user.EmailVerified = true
+	user.Active = true
 	user.EmailVerifiedAt = time.Now()
 
 	if err = d.userRepo.Update(user); err != nil {
@@ -71,7 +72,7 @@ func (d *authService) ActivateEmail(token string, uid string, logger *log.Entry)
 		return errors.New("account activation failed")
 	}
 
-	err = d.redis.Delete(user.ID)
+	err = d.redis.Delete(token)
 	if err != nil {
 		logger.Error(err.Error())
 	}
@@ -79,18 +80,23 @@ func (d *authService) ActivateEmail(token string, uid string, logger *log.Entry)
 	return nil
 }
 
-func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) error {
+func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) *utils.AppError {
 	body.EmailAddress = utils.ToLower(body.EmailAddress)
 	// Check if email address exist
 	existingUser, err := d.userRepo.GetByEmail(body.EmailAddress)
 	if err != nil {
 		log.Error(err.Error())
-		return err
+		return &utils.AppError{
+			Message: "request failed",
+			Error:   err.Error(),
+		}
 	}
 
 	if existingUser != nil {
 		log.Info("Email address already exist. '%s'", body.EmailAddress)
-		return errors.New("account already exist")
+		return &utils.AppError{
+			Message: "account already exist",
+		}
 	}
 
 	// Save user details
@@ -99,14 +105,21 @@ func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) err
 		LastName:     body.LastName,
 		DisplayName:  utils.AddToStr(body.DisplayName),
 		EmailAddress: body.EmailAddress,
-		Tier:         uint8(0),
-		PhoneNumber:  utils.AddToStr(body.PhoneNumber),
+		PhoneNumber:  body.PhoneNumber,
+	}
+
+	if !configs.IsProduction() {
+		user.EmailVerified = true
+		user.EmailVerifiedAt = time.Now()
+		user.Active = true
 	}
 
 	err = d.userRepo.Create(user)
 	if err != nil {
 		log.Error("error: occurred when saving new user. %s", err.Error())
-		return errors.New("registration was not successful")
+		return &utils.AppError{
+			Message: "registration was not successful",
+		}
 	}
 
 	// OTP token
@@ -126,17 +139,9 @@ func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) err
 			log.Error("Error occurred when sending activation email. %s", err.Error())
 		}
 
-		err = d.redis.Set(user.ID, token, time.Hour*24)
+		err = d.repo.StoreToken(user.ID, token, 24*60)
 		if err != nil {
 			log.Error("Error occurred when when token %s", err)
-		}
-	} else {
-		user.EmailVerified = true
-		user.EmailVerifiedAt = time.Now()
-
-		err = d.userRepo.Update(user)
-		if err != nil {
-			return err
 		}
 	}
 
@@ -146,9 +151,9 @@ func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) err
 // Login
 // Handles authentication logic
 func (d *authService) Login(body *types.AuthRequest) (*types.LoginResponse, error) {
-	response := &types.LoginResponse{}
+	response := new(types.LoginResponse)
 
-	user, err := d.userRepo.GetByEmail(strings.ToLower(body.EmailAddress))
+	user, err := d.userRepo.GetByEmail(utils.ToLower(body.EmailAddress))
 	if err != nil {
 		log.Error("An error occurred when fetching user profile. %s", err.Error())
 		return nil, errors.New(constant.InternalServerError)
@@ -157,8 +162,12 @@ func (d *authService) Login(body *types.AuthRequest) (*types.LoginResponse, erro
 		return nil, errors.New("account not found")
 	}
 
-	// Validate user token
-	token, err := d.redis.Get(user.ID)
+	if !user.Active {
+		return nil, errors.New("account is inactive")
+	}
+
+	// Validate OTP token
+	token, err := d.repo.GetToken(user.ID)
 	if err != nil {
 		log.Error("An Error occurred when validating login token. %s", err.Error())
 		return nil, errors.New("token validation failed")
@@ -169,10 +178,15 @@ func (d *authService) Login(body *types.AuthRequest) (*types.LoginResponse, erro
 	}
 
 	// Generate JWT for user
-	jwt, err := d.GenerateJWT(user.ID)
+	tk, err := d.generateJWT(user.ID)
 	if err != nil {
 		log.Error("An error occurred when generating jwt token. %s", err.Error())
-		return nil, errors.New("authentication failed")
+		return nil, errors.New("request failed")
+	}
+
+	err = d.repo.DeleteToken(user.ID)
+	if err != nil {
+		log.Error("an error occurred when removing jwt token. %s", err.Error())
 	}
 
 	profile := types.UserProfile{
@@ -187,15 +201,19 @@ func (d *authService) Login(body *types.AuthRequest) (*types.LoginResponse, erro
 	}
 
 	response.Profile = profile
-	response.Authentication = *jwt
+	response.Authentication = *tk
+
+	defer func() {
+		user.LastLogin = time.Now()
+		d.userRepo.Update(user)
+	}()
 
 	return response, nil
-
 }
 
 func (d *authService) RequestToken(body *types.EmailRequest, logger *log.Entry) error {
 	if !utils.ValidateEmail(body.EmailAddress) {
-		return errors.New("invalid email address")
+		return errors.New("account not found")
 	}
 	email := strings.ToLower(body.EmailAddress)
 
@@ -203,7 +221,7 @@ func (d *authService) RequestToken(body *types.EmailRequest, logger *log.Entry) 
 	user, err := d.userRepo.GetByEmail(email)
 	if err != nil {
 		logger.Error(err.Error())
-		return errors.New(constant.InternalServerError)
+		return errors.New("request failed")
 	}
 
 	if user == nil {
@@ -211,37 +229,33 @@ func (d *authService) RequestToken(body *types.EmailRequest, logger *log.Entry) 
 		return errors.New("user not found")
 	}
 
-	var token string
-	var duration uint = 5
-	if configs.Instance.GetEnv() != configs.SANDBOX {
-		token = utils.GenerateNumericToken(4)
-		var duration uint = 5
-		err = d.redis.Set(user.ID, token, time.Minute*time.Duration(duration))
-		if err != nil {
-			logger.Error("Error occurred when sending token %s", err)
-			return errors.New("request failed please try again")
+	duration := uint(5)
 
-		}
-	} else {
-		token = "1234"
-		err = d.redis.Set(user.ID, token, time.Minute*time.Duration(duration))
+	if configs.IsProduction() {
+		token := utils.GenerateNumericToken(6)
+		err = d.repo.StoreToken(user.ID, token, duration)
 		if err != nil {
 			logger.Error("Error occurred when sending token %s", err)
 			return errors.New("request failed please try again")
 		}
-	}
 
-	if configs.Instance.GetEnv() != configs.SANDBOX {
 		mailTemplate := &sendgrid.OTPMailRequest{
 			Code:     token,
 			ToMail:   user.EmailAddress,
 			ToName:   user.LastName + " " + user.FirstName,
 			Name:     user.DisplayName,
-			Duration: duration,
+			Duration: uint(duration),
 		}
 		err = sendgrid.SendOTPMail(mailTemplate)
 		if err != nil {
 			logger.Error("Error occurred when sending otp email. %s", err.Error())
+		}
+	} else {
+		token := "123456"
+		err = d.repo.StoreToken(user.ID, token, duration)
+		if err != nil {
+			logger.Error("Error occurred when sending token %s", err)
+			return errors.New("request failed please try again")
 		}
 	}
 
@@ -250,22 +264,24 @@ func (d *authService) RequestToken(body *types.EmailRequest, logger *log.Entry) 
 
 type authCustomClaims struct {
 	UserId string `json:"user_id"`
-	RToken string `json:"token"`
-	Token  jwt.StandardClaims
+	jwt.StandardClaims
 }
 
-func (a authCustomClaims) Valid() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (d *authService) GenerateJWT(userId string) (*types.Authentication, error) {
+func (d *authService) generateJWT(userId string) (*types.Authentication, error) {
 	refreshToken := utils.GenerateNumericToken(32)
+	rt, err := d.repo.GetToken(fmt.Sprintf("auth::%s", userId))
+	if err != nil {
+		return nil, err
+	}
+
+	if rt != nil {
+		refreshToken = utils.AddToStr(rt)
+	}
+
 	expireAt := time.Now().Add(time.Hour * 24)
 	claims := &authCustomClaims{
 		UserId: userId,
-		RToken: refreshToken,
-		Token: jwt.StandardClaims{
+		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: expireAt.Unix(),
 			Issuer:    configs.Instance.AppName,
 			IssuedAt:  time.Now().Unix(),
@@ -280,62 +296,58 @@ func (d *authService) GenerateJWT(userId string) (*types.Authentication, error) 
 		return nil, errors.New("token could not be generated")
 	}
 
+	// Store Refresh token to enable revoking token 30 Days
+	if rt == nil {
+		err = d.repo.StoreToken(fmt.Sprintf("auth::%s", userId), refreshToken, 30*24*60)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &types.Authentication{
 		AccessToken: at,
-		ExpireAt:    expireAt.Second(),
+		ExpireAt:    expireAt.Unix(),
 	}, nil
 }
 
-func (d *authService) ValidateToken(encodedToken string) (*jwt.Token, error) {
-	return jwt.Parse(encodedToken, func(token *jwt.Token) (interface{}, error) {
-
-		if _, isvalid := token.Method.(*jwt.SigningMethodHMAC); !isvalid {
-			return nil, errors.New("invalid token")
+func (d *authService) ValidateToken(encodedToken string) (*authCustomClaims, error) {
+	claims := &authCustomClaims{}
+	tkn, err := jwt.ParseWithClaims(encodedToken, claims, func(token *jwt.Token) (any, error) {
+		rt, err := d.repo.GetToken(fmt.Sprintf("auth::%s", claims.UserId))
+		if err != nil {
+			return nil, err
 		}
-		return []byte(configs.Instance.Secret), nil
+		key := fmt.Sprintf("%s-%s", configs.Instance.Secret, utils.AddToStr(rt))
+		return []byte(key), nil
 	})
+
+	if err != nil || !tkn.Valid {
+		return nil, err
+	}
+
+	return claims, nil
 }
 
-func (d *authService) RefreshUserToken(body types.RefreshTokenRequest, token string, logger *log.Entry) (*types.Authentication, error) {
-	var userId string
-	rToken, err := NewAuthService().ValidateToken(body.RefreshToken)
+func (d *authService) RefreshUserToken(body *types.RefreshTokenRequest, logger *log.Entry) (*types.Authentication, error) {
+	claims, err := d.ValidateToken(body.Token)
 	if err != nil {
-		if err == jwt.ErrSignatureInvalid {
-			logger.Error(jwt.ErrSignatureInvalid)
-			return nil, errors.New(constant.InternalServerError)
-		}
+		return nil, err
 	}
 
-	tk, err := NewAuthService().ValidateToken(token)
-	if err != nil {
-		if err == jwt.ErrSignatureInvalid {
-			logger.Error(jwt.ErrSignatureInvalid)
-			return nil, errors.New(constant.InternalServerError)
-		}
-	}
-
-	if claims, ok := rToken.Claims.(jwt.MapClaims); ok && rToken.Valid {
-		userId = claims["user_id"].(string)
-
-		if claims, ok = tk.Claims.(jwt.MapClaims); ok {
-			uid := claims["user_id"].(string)
-
-			if uid != userId {
-				return nil, errors.New("invalid refresh token")
-			}
-
-			// Todo: check refresh or JWT has been revoked
-		}
-	} else {
-		return nil, errors.New("refresh token has expired")
-	}
-
-	// Todo: Invalidate old refresh and JWT
 	var response *types.Authentication
-	response, err = NewAuthService().GenerateJWT(userId)
+	response, err = d.generateJWT(claims.UserId)
 	if err != nil {
-		log.Error(http.StatusInternalServerError)
-		return nil, errors.New(constant.InternalServerError)
+		return nil, errors.New("token could not be generated")
 	}
+
 	return response, nil
+}
+
+func (d *authService) Logout(Token string) error {
+	claims, err := d.ValidateToken(Token)
+	if err != nil {
+		return err
+	}
+
+	// Invalidate Refresh token
+	return d.repo.DeleteToken(fmt.Sprintf("auth::%s", claims.UserId))
 }
