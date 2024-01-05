@@ -4,13 +4,18 @@ import (
 	"github.com/TechBuilder-360/Auth_Server/internal/configs"
 	"github.com/TechBuilder-360/Auth_Server/internal/controllers"
 	"github.com/TechBuilder-360/Auth_Server/internal/middlewares"
-	"github.com/gorilla/mux"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/swagger"
 	log "github.com/sirupsen/logrus"
-	"github.com/swaggo/http-swagger"
 )
 
-func SetupRoutes() *mux.Router {
-	router := mux.NewRouter()
+func SetupRoutes() *fiber.App {
+	router := fiber.New(fiber.Config{
+		CaseSensitive:         true,
+		ErrorHandler:          middlewares.DefaultErrorHandler,
+		DisableStartupMessage: true,
+	})
 
 	var (
 		authController  = controllers.DefaultAuthController()
@@ -21,7 +26,7 @@ func SetupRoutes() *mux.Router {
 	//*******************************************
 	//******* Middlewares **********************
 	//*******************************************
-	router.Use(middlewares.Recovery)
+	router.Use(recover.New())
 
 	//*******************************************
 	//******* Controller **********************
@@ -39,7 +44,7 @@ func SetupRoutes() *mux.Router {
 	usersController.RegisterRoutes(router)
 
 	if configs.IsSandBox() {
-		router.PathPrefix("/documentation/").Handler(httpSwagger.WrapHandler)
+		router.Get("/swagger/*", swagger.HandlerDefault)
 	}
 
 	log.Info("Routes have been initialized")

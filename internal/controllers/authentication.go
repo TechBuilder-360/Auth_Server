@@ -1,39 +1,43 @@
 package controllers
 
 import (
-	"encoding/json"
 	"github.com/TechBuilder-360/Auth_Server/internal/common/constant"
 	"github.com/TechBuilder-360/Auth_Server/internal/common/types"
 	"github.com/TechBuilder-360/Auth_Server/internal/common/utils"
 	"github.com/TechBuilder-360/Auth_Server/internal/middlewares"
 	"github.com/TechBuilder-360/Auth_Server/internal/services"
 	"github.com/TechBuilder-360/Auth_Server/internal/validation"
-	"github.com/gorilla/mux"
+	"github.com/gofiber/fiber/v2"
 	log "github.com/sirupsen/logrus"
 	"net/http"
+	"strings"
 )
 
 type AuthController interface {
-	Registration(w http.ResponseWriter, r *http.Request)
-	ActivateEmail(w http.ResponseWriter, r *http.Request)
-	Authenticate(w http.ResponseWriter, r *http.Request)
-	Login(w http.ResponseWriter, r *http.Request)
-	RefreshUserToken(w http.ResponseWriter, r *http.Request)
-	RegisterRoutes(router *mux.Router)
+	Registration(ctx *fiber.Ctx) error
+	ActivateEmail(ctx *fiber.Ctx) error
+	Authenticate(ctx *fiber.Ctx) error
+	Login(ctx *fiber.Ctx) error
+	RefreshUserToken(ctx *fiber.Ctx) error
+	Logout(ctx *fiber.Ctx) error
+	ValidateToken(ctx *fiber.Ctx) error
+	RegisterRoutes(router *fiber.App)
 }
 
 type NewAuthController struct {
 	as services.AuthService
 }
 
-func (c *NewAuthController) RegisterRoutes(router *mux.Router) {
-	apis := router.PathPrefix("/auth/v1").Subrouter()
+func (c *NewAuthController) RegisterRoutes(router *fiber.App) {
+	apis := router.Group("auth")
 
-	apis.HandleFunc("/registration", c.Registration).Methods(http.MethodPost)
-	apis.HandleFunc("/activate", c.ActivateEmail).Methods(http.MethodGet)
-	apis.HandleFunc("/authentication", c.Authenticate).Methods(http.MethodPost)
-	apis.HandleFunc("/login", c.Login).Methods(http.MethodPost)
-	apis.HandleFunc("/refresh", c.RefreshUserToken).Methods(http.MethodPost)
+	apis.Post("/registration", c.Registration)
+	apis.Get("/activate", c.ActivateEmail)
+	apis.Post("/authentication", c.Authenticate)
+	apis.Post("/login", c.Login)
+	apis.Get("/validate-token", c.ValidateToken)
+	apis.Post("/refresh", c.RefreshUserToken)
+	apis.Put("/logout", c.Logout)
 }
 
 func DefaultAuthController() AuthController {
@@ -51,33 +55,36 @@ func DefaultAuthController() AuthController {
 // @Param        default  body	types.EmailRequest  true  "Authenticate existing user"
 // @Success      200      {object}  utils.SuccessResponse
 // @Router       /auth/authentication [post]
-func (c *NewAuthController) Authenticate(w http.ResponseWriter, r *http.Request) {
+func (c *NewAuthController) Authenticate(ctx *fiber.Ctx) error {
 	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
 	logger.Info("Authenticate")
 
 	body := &types.EmailRequest{}
-	json.NewDecoder(r.Body).Decode(body)
+	err := ctx.BodyParser(body)
+	if err != nil {
+		return err
+	}
 	logger.Info("Request data: %+v", body)
 
-	if validation.ValidateStruct(w, body, logger) {
-		return
-	}
-
-	err := c.as.RequestToken(body, logger)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		logger.Error(err.Error())
-		json.NewEncoder(w).Encode(utils.ErrorResponse{
+	if errs, ok := validation.ValidateStruct(body, logger); !ok {
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
 			Status:  false,
-			Message: err.Error(),
+			Message: strings.Join(errs, "\n"),
 		})
-		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(utils.SuccessResponse{
+	err = c.as.RequestToken(body, logger)
+	if err != nil {
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
+			Status:  false,
+			Message: "request failed",
+			Error:   err.Error(),
+		})
+	}
+
+	return ctx.Status(http.StatusOK).JSON(utils.SuccessResponse{
 		Status:  true,
-		Message: "Successful",
+		Message: "Success",
 	})
 }
 
@@ -89,45 +96,38 @@ func (c *NewAuthController) Authenticate(w http.ResponseWriter, r *http.Request)
 // @Param        default  body	types.AuthRequest  true  "Login to account"
 // @Success      200      {object}  utils.SuccessResponse{Data=types.JWTResponse}
 // @Router       /auth/login [post]
-func (c *NewAuthController) Login(w http.ResponseWriter, r *http.Request) {
+func (c *NewAuthController) Login(ctx *fiber.Ctx) error {
 	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
 	logger.Info("Verify User email and send login token.")
 
 	body := &types.AuthRequest{}
 
-	err := json.NewDecoder(r.Body).Decode(body)
+	err := ctx.BodyParser(body)
 	if err != nil {
-		logger.Error(err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(utils.ErrorResponse{
-			Status:  false,
-			Message: "bad request",
-		})
-		return
+		return err
 	}
 
-	if validation.ValidateStruct(w, body, logger) {
-		return
+	if errs, ok := validation.ValidateStruct(body, logger); !ok {
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
+			Status:  false,
+			Message: strings.Join(errs, "\n"),
+		})
 	}
 
 	response, err := c.as.Login(body)
 	if err != nil {
 		logger.Error(err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(utils.ErrorResponse{
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
 			Status:  false,
 			Message: err.Error(),
 		})
-		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(utils.SuccessResponse{
+	return ctx.Status(http.StatusOK).JSON(utils.SuccessResponse{
 		Status:  true,
 		Message: "Successful",
 		Data:    response,
 	})
-
 }
 
 // Registration @Summary     Register a new user
@@ -138,39 +138,35 @@ func (c *NewAuthController) Login(w http.ResponseWriter, r *http.Request) {
 // @Param        default  body	types.Registration  true  "Add a new user"
 // @Success      200      {object}  utils.SuccessResponse
 // @Router       /auth/register [post]
-func (c *NewAuthController) Registration(w http.ResponseWriter, r *http.Request) {
+func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
 	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
 	logger.Info("Registration")
 
-	requestData := &types.Registration{}
+	body := new(types.Registration)
 
-	if err := json.NewDecoder(r.Body).Decode(requestData); err != nil {
-		logger.Error(err.Error())
-		json.NewEncoder(w).Encode(utils.ErrorResponse{
+	err := ctx.BodyParser(body)
+	if err != nil {
+		return err
+	}
+
+	if errs, ok := validation.ValidateStruct(body, logger); !ok {
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
 			Status:  false,
-			Message: "Invalid request",
+			Message: strings.Join(errs, "\n"),
 		})
-		return
 	}
 
-	if validation.ValidateStruct(w, requestData, logger) {
-
-		return
-	}
-
-	err := c.as.RegisterUser(requestData, logger)
+	e := c.as.RegisterUser(body, logger)
 	if err != nil {
 		logger.Error(err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(utils.ErrorResponse{
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
 			Status:  false,
-			Message: err.Error(),
+			Message: e.Message,
+			Error:   e.Error,
 		})
-		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(utils.SuccessResponse{
+	return ctx.Status(http.StatusCreated).JSON(utils.SuccessResponse{
 		Status:  true,
 		Message: "Successful",
 	})
@@ -185,32 +181,25 @@ func (c *NewAuthController) Registration(w http.ResponseWriter, r *http.Request)
 // @Param        uid    query     string  false  "uid"
 // @Success      200      {object}  utils.SuccessResponse
 // @Router       /auth/activate [get]
-func (c *NewAuthController) ActivateEmail(w http.ResponseWriter, r *http.Request) {
+func (c *NewAuthController) ActivateEmail(ctx *fiber.Ctx) error {
 	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
 	logger.Info("Activating User")
 
-	vars := r.URL.Query()
+	token := ctx.Get("token")
 
-	uid := vars.Get("uid")
-	token := vars.Get("token")
-
-	err := c.as.ActivateEmail(token, uid, logger)
+	err := c.as.ActivateEmail(token, logger)
 	if err != nil {
 		logger.Error(err.Error())
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(utils.ErrorResponse{
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
 			Status:  false,
 			Message: err.Error(),
 		})
-		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(utils.SuccessResponse{
+	return ctx.Status(http.StatusCreated).JSON(utils.SuccessResponse{
 		Status:  true,
 		Message: "account activation successful",
 	})
-	return
 }
 
 // RefreshUserToken
@@ -222,42 +211,84 @@ func (c *NewAuthController) ActivateEmail(w http.ResponseWriter, r *http.Request
 // @Param        default    body     string  false  "token"
 // @Success      200      {object}  utils.SuccessResponse
 // @Router       /auth/refresh [post]
-func (c *NewAuthController) RefreshUserToken(w http.ResponseWriter, r *http.Request) {
+func (c *NewAuthController) RefreshUserToken(ctx *fiber.Ctx) error {
 	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
 	logger.Info("refreshing user token")
 
-	body := types.RefreshTokenRequest{}
+	body := new(types.RefreshTokenRequest)
 
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		logger.Error(err.Error())
-		json.NewEncoder(w).Encode(utils.ErrorResponse{
-			Status:  false,
-			Message: "Invalid request",
-		})
-		return
-	}
-
-	if validation.ValidateStruct(w, body, logger) {
-		return
-	}
-
-	token := middlewares.ExtractBearerToken(r)
-
-	tk, err := c.as.RefreshUserToken(body, token, logger)
+	err := ctx.BodyParser(body)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		return ctx.Status(http.StatusBadRequest).SendString(err.Error())
+	}
+
+	if errs, ok := validation.ValidateStruct(body, logger); !ok {
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
+			Status:  false,
+			Message: strings.Join(errs, "\n"),
+		})
+	}
+
+	tk, err := c.as.RefreshUserToken(body, logger)
+	if err != nil {
 		logger.Error(err.Error())
-		json.NewEncoder(w).Encode(utils.ErrorResponse{
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
 			Status:  false,
 			Message: err.Error(),
 		})
-		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(utils.SuccessResponse{
+	return ctx.Status(http.StatusOK).JSON(utils.SuccessResponse{
 		Status:  true,
-		Message: "refreshed",
+		Message: "success",
 		Data:    tk,
 	})
+}
+
+// Logout
+// @Summary      Logout
+// @Description  Logout
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Success      200      {object}  utils.SuccessResponse
+// @Router       /auth/logout [put]
+func (c *NewAuthController) Logout(ctx *fiber.Ctx) error {
+	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
+	logger.Info("Logout")
+
+	err := c.as.Logout(middlewares.ExtractBearerToken(ctx))
+	if err != nil {
+		logger.Error(err.Error())
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
+			Status:  false,
+			Message: "request failed",
+		})
+	}
+
+	return ctx.Status(http.StatusOK).JSON(utils.SuccessResponse{
+		Status:  true,
+		Message: "success",
+	})
+}
+
+// ValidateToken
+// @Summary      Validate Token
+// @Description  Validate Token
+// @Tags         Auth
+// @Accept       json
+// @Produce      json
+// @Success      200      {object}  utils.SuccessResponse
+// @Router       /auth/validate-token [get]
+func (c *NewAuthController) ValidateToken(ctx *fiber.Ctx) error {
+	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
+	logger.Info("Validate Token")
+
+	_, err := c.as.ValidateToken(middlewares.ExtractBearerToken(ctx))
+	if err != nil {
+		logger.Error(err.Error())
+		return ctx.SendStatus(http.StatusUnauthorized)
+	}
+
+	return ctx.SendStatus(http.StatusOK)
 }

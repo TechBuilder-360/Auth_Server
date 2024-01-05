@@ -1,1 +1,6 @@
 .idea
+bin
+tmp
+.air.toml
+config.yaml
+.env-sample
