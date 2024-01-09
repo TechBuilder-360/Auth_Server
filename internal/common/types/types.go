@@ -24,8 +24,9 @@ type (
 	}
 
 	Authentication struct {
-		AccessToken string `json:"access_token"`
-		ExpireAt    int64  `json:"expire_at"`
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpireAt     int64  `json:"expire_at"`
 	}
 
 	RefreshTokenRequest struct {
