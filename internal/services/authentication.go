@@ -19,7 +19,7 @@ import (
 
 //go:generate mockgen -destination=../mocks/services/mockService.go -package=services github.com/TechBuilder-360/business-directory-backend/services UserService
 type AuthService interface {
-	RegisterUser(body *types.Registration, log *log.Entry) *utils.AppError
+	RegisterUser(body *types.Registration, log *log.Entry) (*types.RegistrationResponse, *utils.AppError)
 	ActivateEmail(token string, log *log.Entry) error
 	Login(body *types.AuthRequest) (*types.LoginResponse, error)
 	generateJWT(userID string) (*types.Authentication, error)
@@ -80,13 +80,13 @@ func (d *authService) ActivateEmail(token string, logger *log.Entry) error {
 	return nil
 }
 
-func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) *utils.AppError {
+func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) (*types.RegistrationResponse, *utils.AppError) {
 	body.EmailAddress = utils.ToLower(body.EmailAddress)
 	// Check if email address exist
 	existingUser, err := d.userRepo.GetByEmail(body.EmailAddress)
 	if err != nil {
 		log.Error(err.Error())
-		return &utils.AppError{
+		return nil, &utils.AppError{
 			Message: "request failed",
 			Error:   err.Error(),
 		}
@@ -94,7 +94,7 @@ func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) *ut
 
 	if existingUser != nil {
 		log.Info("Email address already exist. '%s'", body.EmailAddress)
-		return &utils.AppError{
+		return nil, &utils.AppError{
 			Message: "account already exist",
 		}
 	}
@@ -117,7 +117,7 @@ func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) *ut
 	err = d.userRepo.Create(user)
 	if err != nil {
 		log.Error("error: occurred when saving new user. %s", err.Error())
-		return &utils.AppError{
+		return nil, &utils.AppError{
 			Message: "registration was not successful",
 		}
 	}
@@ -145,7 +145,7 @@ func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) *ut
 		}
 	}
 
-	return nil
+	return &types.RegistrationResponse{UserID: user.ID}, nil
 }
 
 // Login
