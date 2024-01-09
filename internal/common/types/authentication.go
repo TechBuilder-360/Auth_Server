@@ -32,7 +32,7 @@ type EmailRequest struct {
 // Registration ...
 type Registration struct {
 	EmailAddress string  `json:"email_address" validate:"required,email"`
-	Avatar       *string `json:"avatar" validate:"url"`
+	Avatar       *string `json:"avatar"`
 	FirstName    string  `json:"first_name" validate:"required"`
 	LastName     string  `json:"last_name" validate:"required"`
 	DisplayName  *string `json:"display_name"`

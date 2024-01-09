@@ -59,7 +59,7 @@ func (c *NewAuthController) Authenticate(ctx *fiber.Ctx) error {
 	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
 	logger.Info("Authenticate")
 
-	body := &types.EmailRequest{}
+	body := new(types.EmailRequest)
 	err := ctx.BodyParser(body)
 	if err != nil {
 		return err
@@ -94,13 +94,13 @@ func (c *NewAuthController) Authenticate(ctx *fiber.Ctx) error {
 // @Accept       json
 // @Produce      json
 // @Param        default  body	types.AuthRequest  true  "Login to account"
-// @Success      200      {object}  utils.SuccessResponse{Data=types.JWTResponse}
+// @Success      200      {object}  utils.SuccessResponse{Data=types.LoginResponse}
 // @Router       /auth/login [post]
 func (c *NewAuthController) Login(ctx *fiber.Ctx) error {
 	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
 	logger.Info("Verify User email and send login token.")
 
-	body := &types.AuthRequest{}
+	body := new(types.AuthRequest)
 
 	err := ctx.BodyParser(body)
 	if err != nil {
@@ -158,7 +158,7 @@ func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
 
 	resp, e := c.as.RegisterUser(body, logger)
 	if err != nil {
-		logger.Error(err.Error())
+		logger.Error("Message: %s, Error: %s", e.Error, e.Message)
 		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
 			Status:  false,
 			Message: e.Message,
@@ -179,7 +179,6 @@ func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
 // @Accept       json
 // @Produce      json
 // @Param        token    query     string  false  "token"
-// @Param        uid    query     string  false  "uid"
 // @Success      200      {object}  utils.SuccessResponse
 // @Router       /auth/activate [get]
 func (c *NewAuthController) ActivateEmail(ctx *fiber.Ctx) error {
@@ -209,8 +208,8 @@ func (c *NewAuthController) ActivateEmail(ctx *fiber.Ctx) error {
 // @Tags         Auth
 // @Accept       json
 // @Produce      json
-// @Param        default    body     string  false  "token"
-// @Success      200      {object}  utils.SuccessResponse
+// @Param        default  body	types.RefreshTokenRequest  true  "Refresh token"
+// @Success      200      {object}  utils.SuccessResponse{Data=types.Authentication}
 // @Router       /auth/refresh [post]
 func (c *NewAuthController) RefreshUserToken(ctx *fiber.Ctx) error {
 	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
@@ -250,6 +249,7 @@ func (c *NewAuthController) RefreshUserToken(ctx *fiber.Ctx) error {
 // @Summary      Logout
 // @Description  Logout
 // @Tags         Auth
+// @Security
 // @Accept       json
 // @Produce      json
 // @Success      200      {object}  utils.SuccessResponse
@@ -277,6 +277,7 @@ func (c *NewAuthController) Logout(ctx *fiber.Ctx) error {
 // @Summary      Validate Token
 // @Description  Validate Token
 // @Tags         Auth
+// @Security
 // @Accept       json
 // @Produce      json
 // @Success      200      {object}  utils.SuccessResponse

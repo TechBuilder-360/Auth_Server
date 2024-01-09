@@ -304,8 +304,9 @@ func (d *authService) generateJWT(userId string) (*types.Authentication, error) 
 		}
 	}
 	return &types.Authentication{
-		AccessToken: at,
-		ExpireAt:    expireAt.Unix(),
+		AccessToken:  at,
+		RefreshToken: refreshToken,
+		ExpireAt:     expireAt.Unix(),
 	}, nil
 }
 
