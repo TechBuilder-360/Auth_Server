@@ -38,3 +38,7 @@ type Registration struct {
 	DisplayName  *string `json:"display_name"`
 	PhoneNumber  *string `json:"phone_number" validate:"e164"`
 }
+
+type RegistrationResponse struct {
+	UserID string `json:"user_id"`
+}

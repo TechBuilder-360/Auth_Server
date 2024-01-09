@@ -136,7 +136,7 @@ func (c *NewAuthController) Login(ctx *fiber.Ctx) error {
 // @Accept       json
 // @Produce      json
 // @Param        default  body	types.Registration  true  "Add a new user"
-// @Success      200      {object}  utils.SuccessResponse
+// @Success      200      {object}  utils.SuccessResponse{Data=types.RegistrationResponse}
 // @Router       /auth/register [post]
 func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
 	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
@@ -156,7 +156,8 @@ func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
 		})
 	}
 
-	if e := c.as.RegisterUser(body, logger); e != nil {
+	resp, e := c.as.RegisterUser(body, logger)
+	if err != nil {
 		logger.Error("Message: %s, Error: %s", e.Error, e.Message)
 		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
 			Status:  false,
@@ -168,6 +169,7 @@ func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
 	return ctx.Status(http.StatusCreated).JSON(utils.SuccessResponse{
 		Status:  true,
 		Message: "Successful",
+		Data:    resp,
 	})
 }
 
