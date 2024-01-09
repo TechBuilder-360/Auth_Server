@@ -13,7 +13,7 @@ type Controller interface {
 }
 
 func (c *NewController) RegisterRoutes(router *fiber.App) {
-	router.Get("/ping", c.Ping)
+	router.Get("/", c.Ping)
 }
 
 type NewController struct {
