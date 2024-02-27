@@ -157,7 +157,7 @@ func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
 	}
 
 	resp, e := c.as.RegisterUser(body, logger)
-	if err != nil {
+	if e != nil {
 		logger.Error("Message: %s, Error: %s", e.Error, e.Message)
 		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
 			Status:  false,
