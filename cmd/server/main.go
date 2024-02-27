@@ -7,7 +7,7 @@ import (
 	"github.com/TechBuilder-360/Auth_Server/internal/configs"
 	"github.com/TechBuilder-360/Auth_Server/internal/database"
 	"github.com/TechBuilder-360/Auth_Server/internal/database/redis"
-	"github.com/TechBuilder-360/Auth_Server/routers"
+	"github.com/TechBuilder-360/Auth_Server/internal/routers"
 	logrus_papertrail "github.com/polds/logrus-papertrail-hook"
 	log "github.com/sirupsen/logrus"
 	"os"
