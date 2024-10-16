@@ -74,7 +74,7 @@ func main() {
 		panic(fmt.Sprintf("DB migration failed: %s", err.Error()))
 	}
 
-	//go seeder.Seed(dbConnection)
+	//go migration.Seed(dbConnection)
 
 	// Set up the routes
 	router := routers.SetupRoutes()

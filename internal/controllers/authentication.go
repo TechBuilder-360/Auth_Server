@@ -10,7 +10,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	log "github.com/sirupsen/logrus"
 	"net/http"
-	"strings"
 )
 
 type AuthController interface {
@@ -30,6 +29,8 @@ type NewAuthController struct {
 
 func (c *NewAuthController) RegisterRoutes(router *fiber.App) {
 	apis := router.Group("auth")
+
+	apis.Use(middlewares.Logger)
 
 	apis.Post("/registration", c.Registration)
 	apis.Get("/activate", c.ActivateEmail)
@@ -66,11 +67,8 @@ func (c *NewAuthController) Authenticate(ctx *fiber.Ctx) error {
 	}
 	logger.Info("Request data: %+v", body)
 
-	if errs, ok := validation.ValidateStruct(body, logger); !ok {
-		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
-			Status:  false,
-			Message: strings.Join(errs, "\n"),
-		})
+	if err, ok := validation.ValidateStruct(body, logger); !ok {
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ValidationResponse(err))
 	}
 
 	err = c.as.RequestToken(body, logger)
@@ -107,11 +105,8 @@ func (c *NewAuthController) Login(ctx *fiber.Ctx) error {
 		return err
 	}
 
-	if errs, ok := validation.ValidateStruct(body, logger); !ok {
-		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
-			Status:  false,
-			Message: strings.Join(errs, "\n"),
-		})
+	if err, ok := validation.ValidateStruct(body, logger); !ok {
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ValidationResponse(err))
 	}
 
 	response, err := c.as.Login(body)
@@ -130,17 +125,10 @@ func (c *NewAuthController) Login(ctx *fiber.Ctx) error {
 	})
 }
 
-// Registration @Summary     Register a new user
-// @Description  Register a new user
-// @Tags         Auth
-// @Accept       json
-// @Produce      json
-// @Param        default  body	types.Registration  true  "Add a new user"
-// @Success      200      {object}  utils.SuccessResponse{Data=types.RegistrationResponse}
-// @Router       /auth/register [post]
 func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
-	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
-	logger.Info("Registration")
+	requestID := ctx.GetRespHeader(middlewares.RequestID)
+	logger := log.WithFields(log.Fields{constant.RequestIdentifier: requestID})
+	logger.Info("Registration Request")
 
 	body := new(types.Registration)
 
@@ -149,11 +137,8 @@ func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
 		return err
 	}
 
-	if errs, ok := validation.ValidateStruct(body, logger); !ok {
-		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
-			Status:  false,
-			Message: strings.Join(errs, "\n"),
-		})
+	if err, ok := validation.ValidateStruct(body, logger); !ok {
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ValidationResponse(err))
 	}
 
 	resp, e := c.as.RegisterUser(body, logger)
@@ -173,14 +158,6 @@ func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
 	})
 }
 
-// ActivateEmail @Summary     activation email
-// @Description  Request to verification token
-// @Tags         Auth
-// @Accept       json
-// @Produce      json
-// @Param        token    query     string  false  "token"
-// @Success      200      {object}  utils.SuccessResponse
-// @Router       /auth/activate [get]
 func (c *NewAuthController) ActivateEmail(ctx *fiber.Ctx) error {
 	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
 	logger.Info("Activating User")
@@ -222,11 +199,8 @@ func (c *NewAuthController) RefreshUserToken(ctx *fiber.Ctx) error {
 		return ctx.Status(http.StatusBadRequest).SendString(err.Error())
 	}
 
-	if errs, ok := validation.ValidateStruct(body, logger); !ok {
-		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
-			Status:  false,
-			Message: strings.Join(errs, "\n"),
-		})
+	if err, ok := validation.ValidateStruct(body, logger); !ok {
+		return ctx.Status(http.StatusBadRequest).JSON(utils.ValidationResponse(err))
 	}
 
 	tk, err := c.as.RefreshUserToken(body, logger)
