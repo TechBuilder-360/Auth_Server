@@ -11,21 +11,21 @@ import (
 	"github.com/TechBuilder-360/Auth_Server/internal/infrastructure/sendgrid"
 	"github.com/TechBuilder-360/Auth_Server/internal/model"
 	"github.com/TechBuilder-360/Auth_Server/internal/repository"
+	"github.com/TechBuilder-360/Auth_Server/pkg/log"
 	"github.com/dgrijalva/jwt-go"
-	log "github.com/sirupsen/logrus"
 	"strings"
 	"time"
 )
 
 //go:generate mockgen -destination=../mocks/services/mockService.go -package=services github.com/TechBuilder-360/business-directory-backend/services UserService
 type AuthService interface {
-	RegisterUser(body *types.Registration, log *log.Entry) (*types.RegistrationResponse, *utils.AppError)
-	ActivateEmail(token string, log *log.Entry) error
+	RegisterUser(body *types.Registration, log log.Entry) (*types.RegistrationResponse, *utils.AppError)
+	ActivateEmail(token string, log log.Entry) error
 	Login(body *types.AuthRequest) (*types.LoginResponse, error)
 	generateJWT(userID string) (*types.Authentication, error)
 	ValidateToken(encodedToken string) (*authCustomClaims, error)
-	RequestToken(body *types.EmailRequest, logger *log.Entry) error
-	RefreshUserToken(body *types.RefreshTokenRequest, logger *log.Entry) (*types.Authentication, error)
+	RequestToken(body *types.EmailRequest, logger log.Entry) error
+	RefreshUserToken(body *types.RefreshTokenRequest, logger log.Entry) (*types.Authentication, error)
 	Logout(Token string) error
 }
 
@@ -43,7 +43,7 @@ func NewAuthService() AuthService {
 	}
 }
 
-func (d *authService) ActivateEmail(token string, logger *log.Entry) error {
+func (d *authService) ActivateEmail(token string, logger log.Entry) error {
 	uid, err := d.repo.GetToken(token)
 	if err != nil {
 		logger.Error("An Error occurred when validating login token. %s", err.Error())
@@ -80,7 +80,7 @@ func (d *authService) ActivateEmail(token string, logger *log.Entry) error {
 	return nil
 }
 
-func (d *authService) RegisterUser(body *types.Registration, log *log.Entry) (*types.RegistrationResponse, *utils.AppError) {
+func (d *authService) RegisterUser(body *types.Registration, log log.Entry) (*types.RegistrationResponse, *utils.AppError) {
 	body.EmailAddress = utils.ToLower(body.EmailAddress)
 	// Check if email address exist
 	existingUser, err := d.userRepo.GetByEmail(body.EmailAddress)
@@ -211,7 +211,7 @@ func (d *authService) Login(body *types.AuthRequest) (*types.LoginResponse, erro
 	return response, nil
 }
 
-func (d *authService) RequestToken(body *types.EmailRequest, logger *log.Entry) error {
+func (d *authService) RequestToken(body *types.EmailRequest, logger log.Entry) error {
 	if !utils.ValidateEmail(body.EmailAddress) {
 		return errors.New("account not found")
 	}
@@ -328,7 +328,7 @@ func (d *authService) ValidateToken(encodedToken string) (*authCustomClaims, err
 	return claims, nil
 }
 
-func (d *authService) RefreshUserToken(body *types.RefreshTokenRequest, logger *log.Entry) (*types.Authentication, error) {
+func (d *authService) RefreshUserToken(body *types.RefreshTokenRequest, logger log.Entry) (*types.Authentication, error) {
 	claims, err := d.ValidateToken(body.Token)
 	if err != nil {
 		return nil, err

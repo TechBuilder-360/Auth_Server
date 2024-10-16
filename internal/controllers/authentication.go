@@ -1,14 +1,13 @@
 package controllers
 
 import (
-	"github.com/TechBuilder-360/Auth_Server/internal/common/constant"
 	"github.com/TechBuilder-360/Auth_Server/internal/common/types"
 	"github.com/TechBuilder-360/Auth_Server/internal/common/utils"
 	"github.com/TechBuilder-360/Auth_Server/internal/middlewares"
 	"github.com/TechBuilder-360/Auth_Server/internal/services"
 	"github.com/TechBuilder-360/Auth_Server/internal/validation"
+	"github.com/TechBuilder-360/Auth_Server/pkg/log"
 	"github.com/gofiber/fiber/v2"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
@@ -47,17 +46,8 @@ func DefaultAuthController() AuthController {
 	}
 }
 
-// Authenticate
-// @Summary      request to authentication token
-// @Description  Request to authentication token
-// @Tags         Auth
-// @Accept       json
-// @Produce      json
-// @Param        default  body	types.EmailRequest  true  "Authenticate existing user"
-// @Success      200      {object}  utils.SuccessResponse
-// @Router       /auth/authentication [post]
 func (c *NewAuthController) Authenticate(ctx *fiber.Ctx) error {
-	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
+	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Authenticate")
 
 	body := new(types.EmailRequest)
@@ -86,16 +76,8 @@ func (c *NewAuthController) Authenticate(ctx *fiber.Ctx) error {
 	})
 }
 
-// Login @Summary     Login
-// @Description  Authenticate user and get jwt token
-// @Tags         Auth
-// @Accept       json
-// @Produce      json
-// @Param        default  body	types.AuthRequest  true  "Login to account"
-// @Success      200      {object}  utils.SuccessResponse{Data=types.LoginResponse}
-// @Router       /auth/login [post]
 func (c *NewAuthController) Login(ctx *fiber.Ctx) error {
-	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
+	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Verify User email and send login token.")
 
 	body := new(types.AuthRequest)
@@ -126,8 +108,7 @@ func (c *NewAuthController) Login(ctx *fiber.Ctx) error {
 }
 
 func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
-	requestID := ctx.GetRespHeader(middlewares.RequestID)
-	logger := log.WithFields(log.Fields{constant.RequestIdentifier: requestID})
+	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Registration Request")
 
 	body := new(types.Registration)
@@ -159,7 +140,7 @@ func (c *NewAuthController) Registration(ctx *fiber.Ctx) error {
 }
 
 func (c *NewAuthController) ActivateEmail(ctx *fiber.Ctx) error {
-	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
+	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Activating User")
 
 	token := ctx.Get("token")
@@ -179,17 +160,8 @@ func (c *NewAuthController) ActivateEmail(ctx *fiber.Ctx) error {
 	})
 }
 
-// RefreshUserToken
-// @Summary      Refresh authorization token
-// @Description  Refresh authorization token
-// @Tags         Auth
-// @Accept       json
-// @Produce      json
-// @Param        default  body	types.RefreshTokenRequest  true  "Refresh token"
-// @Success      200      {object}  utils.SuccessResponse{Data=types.Authentication}
-// @Router       /auth/refresh [post]
 func (c *NewAuthController) RefreshUserToken(ctx *fiber.Ctx) error {
-	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
+	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("refreshing user token")
 
 	body := new(types.RefreshTokenRequest)
@@ -219,17 +191,8 @@ func (c *NewAuthController) RefreshUserToken(ctx *fiber.Ctx) error {
 	})
 }
 
-// Logout
-// @Summary      Logout
-// @Description  Logout
-// @Tags         Auth
-// @Security
-// @Accept       json
-// @Produce      json
-// @Success      200      {object}  utils.SuccessResponse
-// @Router       /auth/logout [put]
 func (c *NewAuthController) Logout(ctx *fiber.Ctx) error {
-	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
+	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Logout")
 
 	err := c.as.Logout(middlewares.ExtractBearerToken(ctx))
@@ -247,17 +210,8 @@ func (c *NewAuthController) Logout(ctx *fiber.Ctx) error {
 	})
 }
 
-// ValidateToken
-// @Summary      Validate Token
-// @Description  Validate Token
-// @Tags         Auth
-// @Security
-// @Accept       json
-// @Produce      json
-// @Success      200      {object}  utils.SuccessResponse
-// @Router       /auth/validate-token [get]
 func (c *NewAuthController) ValidateToken(ctx *fiber.Ctx) error {
-	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
+	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Validate Token")
 
 	_, err := c.as.ValidateToken(middlewares.ExtractBearerToken(ctx))
