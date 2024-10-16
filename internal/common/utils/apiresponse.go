@@ -14,3 +14,11 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 	Error   string `json:"error,omitempty"`
 }
+
+func ValidationResponse(error string) ErrorResponse {
+	return ErrorResponse{
+		Status:  false,
+		Message: "Request Failed",
+		Error:   error,
+	}
+}

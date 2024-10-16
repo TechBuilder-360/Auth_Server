@@ -1,4 +1,4 @@
-package seeder
+package migration
 
 import (
 	"github.com/TechBuilder-360/Auth_Server/internal/common/utils"
@@ -16,7 +16,7 @@ func Seed(db *gorm.DB) {
 
 	for _, e := range errs {
 		if e != nil {
-			log.Errorf("seeder error-> %v", e)
+			log.Errorf("migration error-> %v", e)
 		}
 	}
 }
