@@ -1,11 +1,10 @@
 package controllers
 
 import (
-	"github.com/TechBuilder-360/Auth_Server/internal/common/constant"
 	"github.com/TechBuilder-360/Auth_Server/internal/common/utils"
 	"github.com/TechBuilder-360/Auth_Server/internal/services"
+	"github.com/TechBuilder-360/Auth_Server/pkg/log"
 	"github.com/gofiber/fiber/v2"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
@@ -33,16 +32,8 @@ func DefaultUserController() IUserController {
 	}
 }
 
-// GetUser
-// @Summary      Validate Token
-// @Description  Validate Token
-// @Tags         Users
-// @Accept       json
-// @Produce      json
-// @Success      200      {object}  utils.SuccessResponse{Data=types.UserProfile}
-// @Router       /users/{id} [get]
 func (c *UserController) GetUser(ctx *fiber.Ctx) error {
-	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
+	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Get User")
 
 	userId := ctx.Params("id")
@@ -72,7 +63,7 @@ func (c *UserController) GetUser(ctx *fiber.Ctx) error {
 // @Success      200      {object}  utils.SuccessResponse{Data=types.UserProfile}
 // @Router       /users [get]
 func (c *UserController) GetUserByEmail(ctx *fiber.Ctx) error {
-	logger := log.WithFields(log.Fields{constant.RequestIdentifier: utils.GenerateUUID()})
+	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Get User")
 
 	email := ctx.Query("email")
