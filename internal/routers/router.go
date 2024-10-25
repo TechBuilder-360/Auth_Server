@@ -3,7 +3,7 @@ package routers
 import (
 	"github.com/TechBuilder-360/Auth_Server/internal/configs"
 	"github.com/TechBuilder-360/Auth_Server/internal/controllers"
-	"github.com/TechBuilder-360/Auth_Server/internal/middlewares"
+	"github.com/TechBuilder-360/Auth_Server/internal/middleware"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/swagger"
@@ -13,7 +13,7 @@ import (
 func SetupRoutes() *fiber.App {
 	router := fiber.New(fiber.Config{
 		CaseSensitive:         true,
-		ErrorHandler:          middlewares.DefaultErrorHandler,
+		ErrorHandler:          middleware.DefaultErrorHandler,
 		DisableStartupMessage: true,
 	})
 
@@ -27,6 +27,7 @@ func SetupRoutes() *fiber.App {
 	//******* Middlewares **********************
 	//*******************************************
 	router.Use(recover.New())
+	router.Use(middleware.Logger)
 
 	//*******************************************
 	//******* Controller **********************

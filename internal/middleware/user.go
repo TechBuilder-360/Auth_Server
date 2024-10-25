@@ -1,4 +1,4 @@
-package middlewares
+package middleware
 
 import (
 	"context"
@@ -26,7 +26,8 @@ func AuthJWT(c *fiber.Ctx) error {
 	if err != nil || token == nil {
 		return c.Status(http.StatusUnauthorized).JSON(utils.ErrorResponse{
 			Status:  false,
-			Message: "authentication failed",
+			Message: "request failed",
+			Error:   "authentication failed",
 		})
 	}
 
@@ -55,8 +56,8 @@ func ExtractBearerToken(ctx *fiber.Ctx) string {
 	return tokenString
 }
 
-func UserFromContext(r *http.Request) (*model.User, error) {
-	u := r.Context().Value(AuthUserContextKey)
+func UserFromContext(ctx context.Context) (*model.User, error) {
+	u := ctx.Value(AuthUserContextKey)
 
 	if u == nil {
 		return nil, errors.New("no user in context")

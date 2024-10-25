@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"github.com/TechBuilder-360/Auth_Server/internal/common/utils"
+	"github.com/TechBuilder-360/Auth_Server/internal/middleware"
 	"github.com/TechBuilder-360/Auth_Server/internal/services"
 	"github.com/TechBuilder-360/Auth_Server/pkg/log"
 	"github.com/gofiber/fiber/v2"
@@ -21,9 +22,10 @@ type UserController struct {
 func (c *UserController) RegisterRoutes(router *fiber.App) {
 	users := router.Group("/users")
 
-	users.Get("", c.GetUserByEmail)
-	users.Get("/:id", c.GetUser)
+	users.Use(middleware.AuthJWT)
 
+	//users.Get("", c.GetUserByEmail)
+	users.Get("", c.GetUser)
 }
 
 func DefaultUserController() IUserController {
@@ -36,9 +38,16 @@ func (c *UserController) GetUser(ctx *fiber.Ctx) error {
 	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Get User")
 
-	userId := ctx.Params("id")
+	user, err := middleware.UserFromContext(ctx.UserContext())
+	if err != nil {
+		logger.Error("error fetching user profile %s", err.Error())
+		return ctx.Status(http.StatusOK).JSON(utils.ErrorResponse{
+			Status:  false,
+			Message: "user not found",
+		})
+	}
 
-	profile, err := c.as.GetUserByID(userId)
+	profile, err := c.as.GetUser(user)
 	if err != nil {
 		logger.Error("error fetching user profile %s", err.Error())
 		return ctx.Status(http.StatusOK).JSON(utils.ErrorResponse{

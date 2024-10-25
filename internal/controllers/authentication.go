@@ -3,7 +3,7 @@ package controllers
 import (
 	"github.com/TechBuilder-360/Auth_Server/internal/common/types"
 	"github.com/TechBuilder-360/Auth_Server/internal/common/utils"
-	"github.com/TechBuilder-360/Auth_Server/internal/middlewares"
+	"github.com/TechBuilder-360/Auth_Server/internal/middleware"
 	"github.com/TechBuilder-360/Auth_Server/internal/services"
 	"github.com/TechBuilder-360/Auth_Server/internal/validation"
 	"github.com/TechBuilder-360/Auth_Server/pkg/log"
@@ -29,7 +29,7 @@ type NewAuthController struct {
 func (c *NewAuthController) RegisterRoutes(router *fiber.App) {
 	apis := router.Group("auth")
 
-	apis.Use(middlewares.Logger)
+	apis.Use(middleware.Logger)
 
 	apis.Post("/registration", c.Registration)
 	apis.Get("/activate", c.ActivateEmail)
@@ -195,7 +195,7 @@ func (c *NewAuthController) Logout(ctx *fiber.Ctx) error {
 	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Logout")
 
-	err := c.as.Logout(middlewares.ExtractBearerToken(ctx))
+	err := c.as.Logout(middleware.ExtractBearerToken(ctx))
 	if err != nil {
 		logger.Error(err.Error())
 		return ctx.Status(http.StatusBadRequest).JSON(utils.ErrorResponse{
@@ -214,7 +214,7 @@ func (c *NewAuthController) ValidateToken(ctx *fiber.Ctx) error {
 	logger := log.LoggerInContext(ctx.UserContext())
 	logger.Info("Validate Token")
 
-	_, err := c.as.ValidateToken(middlewares.ExtractBearerToken(ctx))
+	_, err := c.as.ValidateToken(middleware.ExtractBearerToken(ctx))
 	if err != nil {
 		logger.Error(err.Error())
 		return ctx.SendStatus(http.StatusUnauthorized)
