@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"github.com/TechBuilder-360/Auth_Server/internal/common/utils"
 	"github.com/google/uuid"
 	"io"
 	"os"
@@ -211,5 +212,5 @@ func LoggerInContext(ctx context.Context) Entry {
 	if data, ok := ctx.Value(LoggerInCtx).(Entry); ok {
 		return data
 	}
-	return &entry{}
+	return WithField("REQUEST_ID", utils.GenerateUUID())
 }

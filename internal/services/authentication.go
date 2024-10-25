@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/TechBuilder-360/Auth_Server/internal/common/constant"
@@ -12,7 +13,8 @@ import (
 	"github.com/TechBuilder-360/Auth_Server/internal/model"
 	"github.com/TechBuilder-360/Auth_Server/internal/repository"
 	"github.com/TechBuilder-360/Auth_Server/pkg/log"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 	"strings"
 	"time"
 )
@@ -23,7 +25,7 @@ type AuthService interface {
 	ActivateEmail(token string, log log.Entry) error
 	Login(body *types.AuthRequest) (*types.LoginResponse, error)
 	generateJWT(userID string) (*types.Authentication, error)
-	ValidateToken(encodedToken string) (*authCustomClaims, error)
+	ValidateToken(encodedToken string) (*jwt.RegisteredClaims, error)
 	RequestToken(body *types.EmailRequest, logger log.Entry) error
 	RefreshUserToken(body *types.RefreshTokenRequest, logger log.Entry) (*types.Authentication, error)
 	Logout(Token string) error
@@ -173,7 +175,13 @@ func (d *authService) Login(body *types.AuthRequest) (*types.LoginResponse, erro
 		return nil, errors.New("token validation failed")
 	}
 
-	if token == nil || utils.AddToStr(token) != body.Otp {
+	if token == nil {
+		return nil, errors.New("invalid OTP")
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(utils.AddToStr(token)), []byte(body.Otp))
+	if err != nil {
+		log.Error("An Error occurred when comparing login token. %s", err.Error())
 		return nil, errors.New("invalid OTP")
 	}
 
@@ -230,41 +238,37 @@ func (d *authService) RequestToken(body *types.EmailRequest, logger log.Entry) e
 	}
 
 	duration := uint(5)
+	otp := "123456"
 
 	if configs.IsProduction() {
-		token := utils.GenerateNumericToken(6)
-		err = d.repo.StoreToken(user.ID, token, duration)
-		if err != nil {
-			logger.Error("Error occurred when sending token %s", err)
-			return errors.New("request failed please try again")
-		}
+		otp = utils.GenerateNumericToken(6)
 
 		mailTemplate := &sendgrid.OTPMailRequest{
-			Code:     token,
+			Code:     otp,
 			ToMail:   user.EmailAddress,
 			ToName:   user.LastName + " " + user.FirstName,
 			Name:     user.DisplayName,
-			Duration: uint(duration),
+			Duration: duration,
 		}
 		err = sendgrid.SendOTPMail(mailTemplate)
 		if err != nil {
 			logger.Error("Error occurred when sending otp email. %s", err.Error())
 		}
-	} else {
-		token := "123456"
-		err = d.repo.StoreToken(user.ID, token, duration)
-		if err != nil {
-			logger.Error("Error occurred when sending token %s", err)
-			return errors.New("request failed please try again")
-		}
+	}
+
+	hashedOTP, _ := bcrypt.GenerateFromPassword([]byte(otp), bcrypt.DefaultCost)
+	err = d.repo.StoreToken(user.ID, string(hashedOTP), duration)
+	if err != nil {
+		logger.Error("Error occurred when sending token %s", err)
+		return errors.New("request failed please try again")
 	}
 
 	return nil
 }
 
-type authCustomClaims struct {
-	UserId string `json:"user_id"`
-	jwt.StandardClaims
+type AuthToken struct {
+	Token        string
+	RefreshToken string
 }
 
 func (d *authService) generateJWT(userId string) (*types.Authentication, error) {
@@ -275,17 +279,21 @@ func (d *authService) generateJWT(userId string) (*types.Authentication, error) 
 	}
 
 	if rt != nil {
-		refreshToken = utils.AddToStr(rt)
+		tk := AuthToken{}
+		err = json.Unmarshal([]byte(utils.AddToStr(rt)), &tk)
+		if err != nil {
+			return nil, err
+		}
+		refreshToken = tk.RefreshToken
 	}
 
-	expireAt := time.Now().Add(time.Hour * 24)
-	claims := &authCustomClaims{
-		UserId: userId,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expireAt.Unix(),
-			Issuer:    configs.Instance.AppName,
-			IssuedAt:  time.Now().Unix(),
-		},
+	issuedAt := time.Now()
+	expireAt := issuedAt.Add(time.Hour * 24)
+	claims := jwt.RegisteredClaims{
+		Issuer:    configs.Instance.AppName,
+		ExpiresAt: jwt.NewNumericDate(expireAt),
+		IssuedAt:  jwt.NewNumericDate(issuedAt),
+		ID:        userId,
 	}
 
 	//encoded string
@@ -298,7 +306,18 @@ func (d *authService) generateJWT(userId string) (*types.Authentication, error) 
 
 	// Store Refresh token to enable revoking token 30 Days
 	if rt == nil {
-		err = d.repo.StoreToken(fmt.Sprintf("auth::%s", userId), refreshToken, 30*24*60)
+		tk := AuthToken{
+			Token:        at,
+			RefreshToken: refreshToken,
+		}
+
+		var marshal []byte
+		marshal, err = json.Marshal(tk)
+		if err != nil {
+			return nil, err
+		}
+
+		err = d.repo.StoreToken(fmt.Sprintf("auth::%s", userId), string(marshal), 30*24*60)
 		if err != nil {
 			return nil, err
 		}
@@ -310,14 +329,30 @@ func (d *authService) generateJWT(userId string) (*types.Authentication, error) 
 	}, nil
 }
 
-func (d *authService) ValidateToken(encodedToken string) (*authCustomClaims, error) {
-	claims := &authCustomClaims{}
+func (d *authService) ValidateToken(encodedToken string) (*jwt.RegisteredClaims, error) {
+	claims := &jwt.RegisteredClaims{}
 	tkn, err := jwt.ParseWithClaims(encodedToken, claims, func(token *jwt.Token) (any, error) {
-		rt, err := d.repo.GetToken(fmt.Sprintf("auth::%s", claims.UserId))
+		authToken, err := d.repo.GetToken(fmt.Sprintf("auth::%s", claims.ID))
 		if err != nil {
 			return nil, err
 		}
-		key := fmt.Sprintf("%s-%s", configs.Instance.Secret, utils.AddToStr(rt))
+
+		if err != nil {
+			return nil, err
+		}
+
+		tk := AuthToken{}
+
+		err = json.Unmarshal([]byte(utils.AddToStr(authToken)), &tk)
+		if err != nil {
+			return nil, err
+		}
+
+		if tk.Token != encodedToken {
+			return nil, errors.New("jwt token not found")
+		}
+
+		key := fmt.Sprintf("%s-%s", configs.Instance.Secret, tk.RefreshToken)
 		return []byte(key), nil
 	})
 
@@ -335,7 +370,7 @@ func (d *authService) RefreshUserToken(body *types.RefreshTokenRequest, logger l
 	}
 
 	var response *types.Authentication
-	response, err = d.generateJWT(claims.UserId)
+	response, err = d.generateJWT(claims.ID)
 	if err != nil {
 		return nil, errors.New("token could not be generated")
 	}
@@ -350,5 +385,5 @@ func (d *authService) Logout(Token string) error {
 	}
 
 	// Invalidate Refresh token
-	return d.repo.DeleteToken(fmt.Sprintf("auth::%s", claims.UserId))
+	return d.repo.DeleteToken(fmt.Sprintf("auth::%s", claims.ID))
 }

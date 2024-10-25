@@ -9,7 +9,7 @@ import (
 //go:generate mockgen -destination=../mocks/services/mockService.go -package=services github.com/TechBuilder-360/business-directory-backend/services UserService
 type UserService interface {
 	Update(user *model.User) error
-	GetUserByID(id string) (*types.UserProfile, error)
+	GetUser(user *model.User) (*types.UserProfile, error)
 	GetUserByEmail(email string) (*types.UserProfile, error)
 }
 
@@ -17,12 +17,7 @@ type DefaultUserService struct {
 	userRepo repository.UserRepository
 }
 
-func (r *DefaultUserService) GetUserByID(id string) (*types.UserProfile, error) {
-	user, err := r.userRepo.GetUserByID(id)
-	if err != nil {
-		return nil, err
-	}
-
+func (r *DefaultUserService) GetUser(user *model.User) (*types.UserProfile, error) {
 	return &types.UserProfile{
 		ID:            user.ID,
 		FirstName:     user.FirstName,
